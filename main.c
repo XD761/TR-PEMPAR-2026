@@ -1,48 +1,48 @@
-//
- * Simulasi Particle System 2D - Efek Api (Fire Simulation) "Full & Wavy"
- * Implementasi paralel menggunakan MPI (Message Passing Interface)
- *
- * Tugas Rancang - Praktikum Pemrosesan Paralel (CE 602)
- *
- * ------------------------------------------------------------------
- * ARSITEKTUR PARALEL (ringkas, detail lengkap ada di README.md):
- *
- * - N_PARTICLES partikel dibagi rata ke seluruh proses MPI (rank).
- * Setiap rank HANYA menyimpan dan mengupdate potongan (slice)
- * partikel miliknya sendiri -> distributed memory, bukan replikasi.
- *
- * - Setiap frame, tiap rank menghitung histogram kepadatan lokal
- * (berapa banyak partikel aktif per kolom grid) dari slice-nya,
- * lalu seluruh rank saling bertukar dan menjumlahkan histogram itu
- * dengan MPI_Allreduce (SUM). Hasilnya dipakai sebagai medan
- * "kepadatan termal" bersama yang memengaruhi daya angkat (buoyancy)
- * tiap partikel -> ini adalah bentuk interaksi antar-partikel yang
- * dihitung secara paralel dan terdistribusi.
- *
- * - Setiap rank lalu mengupdate posisi/kecepatan/usia partikel di
- * slice-nya sendiri (fisika api: naik karena panas, turbulensi,
- * pendinginan, respawn).
- *
- * - Rank 0 mengumpulkan seluruh slice (MPI_Gatherv, karena ukuran
- * slice antar rank bisa berbeda jika N_PARTICLES tidak habis dibagi
- * jumlah proses) untuk keperluan VISUALISASI saja. Rank lain tidak
- * pernah membuka window/SDL.
- *
- * Build : lihat Makefile (make)
- * Jalankan: mpirun -np <jumlah_proses> ./fire_sim [max_frames]
- * max_frames opsional, untuk pengujian otomatis/headless.
- *
- * KONTROL INTERAKTIF:
- * - Klik & tahan tombol kiri mouse di atas api -> partikel di sekitar
- * kursor menyingkir (gaya tolak radial dari titik mouse).
- * - Tombol SPASI -> pause / lanjutkan simulasi (toggle).
- * - Tahan tombol 'W' -> api membesar (lebih tinggi & lebih besar).
- * - Tahan tombol 'S' -> api mengecil.
- * Posisi mouse, status pause, dan level intensitas hanya diketahui
- * rank 0 (pemilik window), sehingga setiap frame rank 0 menyiarkan
- * status tersebut (MPI_Bcast) ke seluruh rank agar update fisika di
- * semua rank konsisten.
- * ------------------------------------------------------------------
+/*
+Simulasi Particle System 2D - Efek Api (Fire Simulation) "Full & Wavy"
+Implementasi paralel menggunakan MPI (Message Passing Interface)
+
+Tugas Rancang - Praktikum Pemrosesan Paralel (CE 602)
+
+------------------------------------------------------------------
+ARSITEKTUR PARALEL (ringkas, detail lengkap ada di README.md):
+
+- N_PARTICLES partikel dibagi rata ke seluruh proses MPI (rank).
+Setiap rank HANYA menyimpan dan mengupdate potongan (slice)
+partikel miliknya sendiri -> distributed memory, bukan replikasi.
+
+- Setiap frame, tiap rank menghitung histogram kepadatan lokal
+(berapa banyak partikel aktif per kolom grid) dari slice-nya,
+lalu seluruh rank saling bertukar dan menjumlahkan histogram itu
+dengan MPI_Allreduce (SUM). Hasilnya dipakai sebagai medan
+"kepadatan termal" bersama yang memengaruhi daya angkat (buoyancy)
+tiap partikel -> ini adalah bentuk interaksi antar-partikel yang
+dihitung secara paralel dan terdistribusi.
+ 
+- Setiap rank lalu mengupdate posisi/kecepatan/usia partikel di
+ slice-nya sendiri (fisika api: naik karena panas, turbulensi,
+ pendinginan, respawn).
+
+ - Rank 0 mengumpulkan seluruh slice (MPI_Gatherv, karena ukuran
+ slice antar rank bisa berbeda jika N_PARTICLES tidak habis dibagi
+ jumlah proses) untuk keperluan VISUALISASI saja. Rank lain tidak
+ pernah membuka window/SDL.
+
+ Build : lihat Makefile (make)
+ Jalankan: mpirun -np <jumlah_proses> ./fire_sim [max_frames]
+ max_frames opsional, untuk pengujian otomatis/headless.
+
+ KONTROL INTERAKTIF:
+ - Klik & tahan tombol kiri mouse di atas api -> partikel di sekitar
+ kursor menyingkir (gaya tolak radial dari titik mouse).
+ - Tombol SPASI -> pause / lanjutkan simulasi (toggle).
+ - Tahan tombol 'W' -> api membesar (lebih tinggi & lebih besar).
+ - Tahan tombol 'S' -> api mengecil.
+ Posisi mouse, status pause, dan level intensitas hanya diketahui
+ rank 0 (pemilik window), sehingga setiap frame rank 0 menyiarkan
+ status tersebut (MPI_Bcast) ke seluruh rank agar update fisika di
+ semua rank konsisten.
+ ------------------------------------------------------------------*/
  
 
 #include <mpi.h>
@@ -94,7 +94,7 @@ typedef struct {
 } Particle;
 
 // Data kontrol interaktif yang hanya diketahui rank 0 (pemilik window),
- * lalu disiarkan ke seluruh rank tiap frame lewat satu kali MPI_Bcast. 
+// lalu disiarkan ke seluruh rank tiap frame lewat satu kali MPI_Bcast. 
 typedef struct {
     float mouse_x, mouse_y;
     int mouse_down; // tombol kiri mouse sedang ditahan? 
@@ -103,8 +103,8 @@ typedef struct {
 } ControlState;
 
 // Hitung berapa partikel yang menjadi tanggung jawab suatu rank.
- * Sisa pembagian (N % size) didistribusikan ke rank-rank pertama
- * agar beban kerja serata mungkin. 
+// Sisa pembagian (N % size) didistribusikan ke rank-rank pertama
+// agar beban kerja serata mungkin. 
 static int local_count_for_rank(int rank, int size, int n_total) {
     int base = n_total / size;
     int rem = n_total % size;
@@ -198,7 +198,7 @@ int main(int argc, char **argv) {
     init_local_particles(local, my_count, my_offset);
 
     // recvcounts/displs (dalam satuan Particle) hanya dipakai rank 0,
-     * tapi setiap rank menghitungnya sendiri (murah, tak perlu komunikasi) 
+    // tapi setiap rank menghitungnya sendiri (murah, tak perlu komunikasi) 
     int *recvcounts = NULL, *displs = NULL;
     Particle *full = NULL;
     if (rank == 0) {
@@ -273,8 +273,8 @@ int main(int argc, char **argv) {
             control.mouse_down = (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) ? 1 : 0;
 
             // 'W' ditahan -> api membesar; 'S' ditahan -> api mengecil.
-             * SDL_GetKeyboardState memberi status "sedang ditekan" tiap
-             * frame (bukan event sekali-tekan), pas untuk efek hold. 
+            // SDL_GetKeyboardState memberi status "sedang ditekan" tiap
+            // frame (bukan event sekali-tekan), pas untuk efek hold. 
             const Uint8 *keys = SDL_GetKeyboardState(NULL);
             if (keys[SDL_SCANCODE_W]) control.intensity += FIRE_INTENSITY_RATE * FIXED_DT;
             if (keys[SDL_SCANCODE_S]) control.intensity -= FIRE_INTENSITY_RATE * FIXED_DT;
@@ -337,15 +337,14 @@ int main(int argc, char **argv) {
                                  * control.intensity;
 
                 // ========================================================== 
-                // MODIFIKASI: Implementasi Efek Bergelombang (Wavy) Realistis 
-                // Kita menciptakan gaya horizontal yang bergantung pada tinggi
-                 * partikel (p->y) dan waktu (sim_time) untuk ayunan kolom api 
+                // Menciptakan gaya horizontal yang bergantung pada tinggi
+                // partikel (p->y) dan waktu (sim_time) untuk ayunan kolom api 
                 // ========================================================== 
 
                 // wavy_force: menciptakan ayunan horizontal (seperti gelombang)
-                 * Period (kecepatan ayunan): sim_time * 4.0f
-                 * Wavelength (panjang gelombang vertikal): p->y * 0.01f
-                 * Amplitudo (kekuatan ayunan): 100.0f * control.intensity
+                // Period (kecepatan ayunan): sim_time * 4.0f
+                // Wavelength (panjang gelombang vertikal): p->y * 0.01f
+                // Amplitudo (kekuatan ayunan): 100.0f * control.intensity
                  
                 float wavy_force = sinf(sim_time * 4.0f + p->y * 0.01f) * 100.0f * control.intensity;
 
