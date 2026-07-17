@@ -1,4 +1,4 @@
-/*
+//
  * Simulasi Particle System 2D - Efek Api (Fire Simulation) "Full & Wavy"
  * Implementasi paralel menggunakan MPI (Message Passing Interface)
  *
@@ -43,7 +43,7 @@
  * status tersebut (MPI_Bcast) ke seluruh rank agar update fisika di
  * semua rank konsisten.
  * ------------------------------------------------------------------
- */
+ 
 
 #include <mpi.h>
 #include <SDL2/SDL.h>
@@ -53,58 +53,58 @@
 #include <math.h>
 #include <time.h>
 
-/* ---------------------- Konfigurasi Simulasi ---------------------- */
+// ---------------------- Konfigurasi Simulasi ----------------------
 #define WIDTH 800
 #define HEIGHT 600
 
-/* MODIFIKASI: Jumlah partikel dinaikkan drastis agar padat saat spread full width */
-#define N_PARTICLES 100000 /* dinaikkan agar padat, min 500  */
+// MODIFIKASI: Jumlah partikel dinaikkan drastis agar padat saat spread full width
+#define N_PARTICLES 100000 // dinaikkan agar padat, min 500
 
-#define GRID_COLS 50 /* jumlah bucket untuk histogram */
+#define GRID_COLS 50 // jumlah bucket untuk histogram
 #define TARGET_FPS 90
 #define FIXED_DT (1.0f / TARGET_FPS)
 
-/* MODIFIKASI: Emitor dibuat memenuhi hampir seluruh lebar layar (800) */
-#define EMITTER_HALF_WIDTH 300.0f /* dinaikkan agar emitor memenuhi lebar */
+// MODIFIKASI: Emitor dibuat memenuhi hampir seluruh lebar layar (800) 
+#define EMITTER_HALF_WIDTH 300.0f // dinaikkan agar emitor memenuhi lebar 
 
 #define BASE_BUOYANCY 55.0f
 #define DENSITY_BUOYANCY_GAIN 6.0f
 
-/* MODIFIKASI: Turbulensi dasar dinaikkan agar gerakan api lebih liar */
-#define TURBULENCE_STRENGTH 250.0f /* dinaikkan untuk efek wavy lebih kuat */
+// MODIFIKASI: Turbulensi dasar dinaikkan agar gerakan api lebih liar 
+#define TURBULENCE_STRENGTH 250.0f // dinaikkan untuk efek wavy lebih kuat 
 
 #define VX_DAMPING 0.965f
 #define LIFE_MIN 0.9f
 #define LIFE_MAX 1.6f
 
-#define MOUSE_REPEL_RADIUS 150.0f /* jangkauan pengaruh mouse (px) */
-#define MOUSE_REPEL_STRENGTH 1800.0f /* kekuatan gaya tolak */
+#define MOUSE_REPEL_RADIUS 150.0f // jangkauan pengaruh mouse (px) 
+#define MOUSE_REPEL_STRENGTH 1800.0f // kekuatan gaya tolak 
 
-#define FIRE_INTENSITY_DEFAULT 1.0f /* skala normal */
-#define FIRE_INTENSITY_MIN 0.35f /* api paling kecil saat ditekan 'S' */
-#define FIRE_INTENSITY_MAX 2.20f /* api paling besar saat ditekan 'W' */
-#define FIRE_INTENSITY_RATE 0.7f /* kecepatan perubahan per detik */
+#define FIRE_INTENSITY_DEFAULT 1.0f // skala normal 
+#define FIRE_INTENSITY_MIN 0.35f // api paling kecil saat ditekan 'S' 
+#define FIRE_INTENSITY_MAX 2.20f // api paling besar saat ditekan 'W' 
+#define FIRE_INTENSITY_RATE 0.7f // kecepatan perubahan per detik 
 
 typedef struct {
-    float x, y; /* posisi */
-    float vx, vy; /* kecepatan */
-    float life; /* sisa usia (detik), turun tiap frame */
-    float max_life; /* usia awal, dipakai untuk hitung fraksi f */
-    unsigned int seed; /* seed rand_r milik partikel ini */
+    float x, y; // posisi 
+    float vx, vy; // kecepatan 
+    float life; // sisa usia (detik), turun tiap frame 
+    float max_life; // usia awal, dipakai untuk hitung fraksi f 
+    unsigned int seed; // seed rand_r milik partikel ini 
 } Particle;
 
-/* Data kontrol interaktif yang hanya diketahui rank 0 (pemilik window),
- * lalu disiarkan ke seluruh rank tiap frame lewat satu kali MPI_Bcast. */
+// Data kontrol interaktif yang hanya diketahui rank 0 (pemilik window),
+ * lalu disiarkan ke seluruh rank tiap frame lewat satu kali MPI_Bcast. 
 typedef struct {
     float mouse_x, mouse_y;
-    int mouse_down; /* tombol kiri mouse sedang ditahan? */
-    int paused; /* simulasi sedang dijeda? */
-    float intensity; /* skala besar/kecil api (W membesar, S mengecil) */
+    int mouse_down; // tombol kiri mouse sedang ditahan? 
+    int paused; // simulasi sedang dijeda? 
+    float intensity; // skala besar/kecil api (W membesar, S mengecil) 
 } ControlState;
 
-/* Hitung berapa partikel yang menjadi tanggung jawab suatu rank.
+// Hitung berapa partikel yang menjadi tanggung jawab suatu rank.
  * Sisa pembagian (N % size) didistribusikan ke rank-rank pertama
- * agar beban kerja serata mungkin. */
+ * agar beban kerja serata mungkin. 
 static int local_count_for_rank(int rank, int size, int n_total) {
     int base = n_total / size;
     int rem = n_total % size;
@@ -119,7 +119,7 @@ static int local_offset_for_rank(int rank, int size, int n_total) {
 }
 
 static void respawn_particle(Particle *p, unsigned int *seed) {
-    float jitter = (float)(rand_r(seed) % 2000) / 1000.0f - 1.0f; /* -1..1 */
+    float jitter = (float)(rand_r(seed) % 2000) / 1000.0f - 1.0f; // -1..1 
     p->x = (float)(WIDTH / 2) + jitter * EMITTER_HALF_WIDTH;
     p->y = (float)(HEIGHT - 2);
     p->vx = ((float)(rand_r(seed) % 2000) / 1000.0f - 1.0f) * 15.0f;
@@ -134,7 +134,7 @@ static void init_local_particles(Particle *arr, int count, int global_offset) {
         unsigned int seed = (unsigned int)(global_offset + i) * 2654435761u + 12345u;
         arr[i].seed = seed;
         respawn_particle(&arr[i], &arr[i].seed);
-        /* sebar usia awal supaya nyala tidak "serempak" saat mulai */
+        // sebar usia awal supaya nyala tidak "serempak" saat mulai 
         arr[i].life = ((float)(rand_r(&arr[i].seed) % 1000) / 1000.0f) * arr[i].max_life;
     }
 }
@@ -145,29 +145,29 @@ static inline int clampi(int v, int lo, int hi) {
     return v;
 }
 
-/* Warna api berdasarkan fraksi sisa usia f (1 = baru lahir/panas, 0 = padam) */
+// Warna api berdasarkan fraksi sisa usia f (1 = baru lahir/panas, 0 = padam) 
 static void fire_color(float f, Uint8 *r, Uint8 *g, Uint8 *b, Uint8 *a) {
     if (f < 0.0f) f = 0.0f;
     if (f > 1.0f) f = 1.0f;
 
-    if (f > 0.80f) { /* putih -> kuning pucat */
+    if (f > 0.80f) { // putih -> kuning pucat 
         float t = (f - 0.80f) / 0.20f;
         *r = 255; *g = 255;
         *b = (Uint8)(180 + 75 * t);
         *a = 255;
-    } else if (f > 0.55f) { /* kuning -> oranye */
+    } else if (f > 0.55f) { // kuning -> oranye 
         float t = (f - 0.55f) / 0.25f;
         *r = 255;
         *g = (Uint8)(140 + 90 * t);
         *b = (Uint8)(40 * t);
         *a = 255;
-    } else if (f > 0.25f) { /* oranye -> merah */
+    } else if (f > 0.25f) { // oranye -> merah 
         float t = (f - 0.25f) / 0.30f;
         *r = 200 + (Uint8)(55 * t);
         *g = (Uint8)(60 + 80 * t);
         *b = 10;
         *a = 255;
-    } else { /* merah -> asap gelap, memudar */
+    } else { // merah -> asap gelap, memudar 
         float t = f / 0.25f;
         *r = (Uint8)(60 * t + 20);
         *g = (Uint8)(60 * t + 20);
@@ -182,7 +182,7 @@ int main(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    long max_frames = 0; /* 0 = tanpa batas, berhenti hanya lewat window close */
+    long max_frames = 0; // 0 = tanpa batas, berhenti hanya lewat window close 
     if (argc > 1) {
         max_frames = strtol(argv[1], NULL, 10);
     }
@@ -197,8 +197,8 @@ int main(int argc, char **argv) {
     }
     init_local_particles(local, my_count, my_offset);
 
-    /* recvcounts/displs (dalam satuan Particle) hanya dipakai rank 0,
-     * tapi setiap rank menghitungnya sendiri (murah, tak perlu komunikasi) */
+    // recvcounts/displs (dalam satuan Particle) hanya dipakai rank 0,
+     * tapi setiap rank menghitungnya sendiri (murah, tak perlu komunikasi) 
     int *recvcounts = NULL, *displs = NULL;
     Particle *full = NULL;
     if (rank == 0) {
@@ -211,7 +211,7 @@ int main(int argc, char **argv) {
         full = (Particle *)malloc(sizeof(Particle) * N_PARTICLES);
     }
 
-    /* ---------------- SDL hanya diinisialisasi di rank 0 ---------------- */
+    // ---------------- SDL hanya diinisialisasi di rank 0 ---------------- 
     SDL_Window *window = NULL;
     SDL_Renderer *renderer = NULL;
     if (rank == 0) {
@@ -229,7 +229,7 @@ int main(int argc, char **argv) {
         renderer = SDL_CreateRenderer(window, -1,
                                        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
         if (!renderer) {
-            /* fallback bila vsync/accelerated tidak tersedia (mis. driver dummy) */
+            // fallback bila vsync/accelerated tidak tersedia (mis. driver dummy) 
             renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
         }
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -245,8 +245,8 @@ int main(int argc, char **argv) {
     control.mouse_y = (float)HEIGHT / 2.0f;
     control.intensity = FIRE_INTENSITY_DEFAULT;
 
-    double t_compute_total = 0.0; /* akumulasi waktu update fisika (untuk pengujian) */
-    double t_comm_total = 0.0; /* akumulasi waktu komunikasi MPI (untuk pengujian) */
+    double t_compute_total = 0.0; // akumulasi waktu update fisika (untuk pengujian) 
+    double t_comm_total = 0.0; // akumulasi waktu komunikasi MPI (untuk pengujian) 
 
     int *local_hist = (int *)malloc(sizeof(int) * GRID_COLS);
     int *global_hist = (int *)malloc(sizeof(int) * GRID_COLS);
@@ -254,14 +254,14 @@ int main(int argc, char **argv) {
     Uint32 last_ticks = (rank == 0) ? SDL_GetTicks() : 0;
 
     while (!quit) {
-        /* ---- 1. Rank 0 menangani input/window, siarkan sinyal quit ---- */
+        // ---- 1. Rank 0 menangani input/window, siarkan sinyal quit ---- 
         if (rank == 0) {
             SDL_Event e;
             while (SDL_PollEvent(&e)) {
                 if (e.type == SDL_QUIT) quit = 1;
                 if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) quit = 1;
-                /* e.key.repeat == 0 -> hanya trigger sekali per penekanan,
-                 * bukan berkali-kali selama tombol ditahan */
+                // e.key.repeat == 0 -> hanya trigger sekali per penekanan,
+                 * bukan berkali-kali selama tombol ditahan 
                 if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_SPACE && e.key.repeat == 0) {
                     control.paused = !control.paused;
                 }
@@ -272,9 +272,9 @@ int main(int argc, char **argv) {
             control.mouse_y = (float)my;
             control.mouse_down = (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) ? 1 : 0;
 
-            /* 'W' ditahan -> api membesar; 'S' ditahan -> api mengecil.
+            // 'W' ditahan -> api membesar; 'S' ditahan -> api mengecil.
              * SDL_GetKeyboardState memberi status "sedang ditekan" tiap
-             * frame (bukan event sekali-tekan), pas untuk efek hold. */
+             * frame (bukan event sekali-tekan), pas untuk efek hold. 
             const Uint8 *keys = SDL_GetKeyboardState(NULL);
             if (keys[SDL_SCANCODE_W]) control.intensity += FIRE_INTENSITY_RATE * FIXED_DT;
             if (keys[SDL_SCANCODE_S]) control.intensity -= FIRE_INTENSITY_RATE * FIXED_DT;
@@ -296,12 +296,12 @@ int main(int argc, char **argv) {
             if (quit) break;
         }
 
-        /* siarkan posisi mouse, status klik, dan status pause ke semua rank */
+        // siarkan posisi mouse, status klik, dan status pause ke semua rank 
         MPI_Bcast(&control, sizeof(ControlState), MPI_BYTE, 0, MPI_COMM_WORLD);
 
         double t0 = MPI_Wtime();
 
-        /* ---- 2. Histogram kepadatan lokal (dari slice sendiri) ---- */
+        // ---- 2. Histogram kepadatan lokal (dari slice sendiri) ---- 
         memset(local_hist, 0, sizeof(int) * GRID_COLS);
         if (!control.paused) {
             for (int i = 0; i < my_count; i++) {
@@ -313,19 +313,19 @@ int main(int argc, char **argv) {
         }
 
         double t1 = MPI_Wtime();
-        /* ---- 3. Pertukaran & penjumlahan histogram ke seluruh rank ---- */
+        // ---- 3. Pertukaran & penjumlahan histogram ke seluruh rank ---- 
         MPI_Allreduce(local_hist, global_hist, GRID_COLS, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
         double t2 = MPI_Wtime();
 
-        /* ---- 4. Update fisika partikel pada slice milik rank ini ---- */
+        // ---- 4. Update fisika partikel pada slice milik rank ini ---- 
         if (!control.paused) {
             for (int i = 0; i < my_count; i++) {
                 Particle *p = &local[i];
                 p->life -= FIXED_DT;
                 if (p->life <= 0.0f || p->y < -20.0f) {
                     respawn_particle(p, &p->seed);
-                    /* skala intensitas: api "besar" hidup lebih lama & meluncur
-                     * lebih kencang ke atas -> nyala tampak lebih tinggi/besar */
+                    // skala intensitas: api "besar" hidup lebih lama & meluncur
+                     * lebih kencang ke atas -> nyala tampak lebih tinggi/besar 
                     p->life *= control.intensity;
                     p->max_life *= control.intensity;
                     p->vy *= control.intensity;
@@ -336,37 +336,37 @@ int main(int argc, char **argv) {
                 float buoyancy = (BASE_BUOYANCY + DENSITY_BUOYANCY_GAIN * (density / 30.0f))
                                  * control.intensity;
 
-                /* ========================================================== */
-                /* MODIFIKASI: Implementasi Efek Bergelombang (Wavy) Realistis */
-                /* Kita menciptakan gaya horizontal yang bergantung pada tinggi
-                 * partikel (p->y) dan waktu (sim_time) untuk ayunan kolom api */
-                /* ========================================================== */
+                // ========================================================== 
+                // MODIFIKASI: Implementasi Efek Bergelombang (Wavy) Realistis 
+                // Kita menciptakan gaya horizontal yang bergantung pada tinggi
+                 * partikel (p->y) dan waktu (sim_time) untuk ayunan kolom api 
+                // ========================================================== 
 
-                /* wavy_force: menciptakan ayunan horizontal (seperti gelombang)
+                // wavy_force: menciptakan ayunan horizontal (seperti gelombang)
                  * Period (kecepatan ayunan): sim_time * 4.0f
                  * Wavelength (panjang gelombang vertikal): p->y * 0.01f
                  * Amplitudo (kekuatan ayunan): 100.0f * control.intensity
-                 */
+                 
                 float wavy_force = sinf(sim_time * 4.0f + p->y * 0.01f) * 100.0f * control.intensity;
 
-                /* Turbulensi acak dasar (tetap dipertahankan untuk chaos) */
+                // Turbulensi acak dasar (tetap dipertahankan untuk chaos) 
                 float basic_turbulence = sinf(sim_time * 3.0f + (float)(p->seed % 1000) * 0.01f)
                                          * TURBULENCE_STRENGTH;
 
-                /* Gabungkan kedua gaya untuk kecepatan horizontal */
+                // Gabungkan kedua gaya untuk kecepatan horizontal 
                 p->vx = (p->vx + (basic_turbulence + wavy_force) * FIXED_DT) * VX_DAMPING;
 
-                /* Perhitungan kecepatan vertikal (buoyancy) tidak diubah drastis */
+                // Perhitungan kecepatan vertikal (buoyancy) tidak diubah drastis 
                 p->vy -= buoyancy * FIXED_DT;
 
-                /* ---- Efek tolak dari mouse: hanya aktif saat tombol kiri ditahan ---- */
+                // ---- Efek tolak dari mouse: hanya aktif saat tombol kiri ditahan ---- 
                 if (control.mouse_down) {
                     float dx = p->x - control.mouse_x;
                     float dy = p->y - control.mouse_y;
                     float dist2 = dx * dx + dy * dy;
                     if (dist2 < MOUSE_REPEL_RADIUS * MOUSE_REPEL_RADIUS) {
-                        float dist = sqrtf(dist2) + 0.001f; /* hindari bagi nol tepat di kursor */
-                        float falloff = 1.0f - (dist / MOUSE_REPEL_RADIUS); /* 1 di pusat, 0 di tepi */
+                        float dist = sqrtf(dist2) + 0.001f; // hindari bagi nol tepat di kursor 
+                        float falloff = 1.0f - (dist / MOUSE_REPEL_RADIUS); // 1 di pusat, 0 di tepi 
                         float push = falloff * MOUSE_REPEL_STRENGTH;
                         p->vx += (dx / dist) * push * FIXED_DT;
                         p->vy += (dy / dist) * push * FIXED_DT;
@@ -379,11 +379,11 @@ int main(int argc, char **argv) {
                 if (p->x < 0.0f) p->x = 0.0f;
                 if (p->x > (float)WIDTH) p->x = (float)WIDTH;
             }
-        } /* end if (!control.paused) */
+        } // end if (!control.paused) 
 
         double t3 = MPI_Wtime();
 
-        /* ---- 5. Kumpulkan seluruh slice ke rank 0 untuk digambar ---- */
+        // ---- 5. Kumpulkan seluruh slice ke rank 0 untuk digambar ---- 
         MPI_Gatherv(local, my_count * (int)sizeof(Particle), MPI_BYTE,
                     full, recvcounts, displs, MPI_BYTE,
                     0, MPI_COMM_WORLD);
@@ -393,7 +393,7 @@ int main(int argc, char **argv) {
         t_compute_total += (t1 - t0) + (t3 - t2);
         t_comm_total += (t2 - t1) + (t4 - t3);
 
-        /* ---- 6. Rank 0 menggambar frame ---- */
+        // ---- 6. Rank 0 menggambar frame ---- 
         if (rank == 0 && max_frames == 0) {
             SDL_SetRenderDrawColor(renderer, 8, 8, 12, 255);
             SDL_RenderClear(renderer);
@@ -403,8 +403,8 @@ int main(int argc, char **argv) {
                 float f = p->max_life > 0.0f ? (p->life / p->max_life) : 0.0f;
                 Uint8 r, g, b, a;
                 fire_color(f, &r, &g, &b, &a);
-                /* ukuran partikel ikut skala intensitas -> api tampak
-                 * membesar/mengecil, bukan cuma naik lebih tinggi/rendah */
+                // ukuran partikel ikut skala intensitas -> api tampak
+                 * membesar/mengecil, bukan cuma naik lebih tinggi/rendah 
                 int sz = (int)((2 + 4.0f * f) * control.intensity);
                 if (sz < 1) sz = 1;
                 SDL_Rect rect = { (int)p->x - sz / 2, (int)p->y - sz / 2, sz, sz };
@@ -412,7 +412,7 @@ int main(int argc, char **argv) {
                 SDL_RenderFillRect(renderer, &rect);
             }
 
-            /* ---- Indikator bar intensitas di pojok kiri atas ---- */
+            // ---- Indikator bar intensitas di pojok kiri atas ---- 
             {
                 const int bar_x = 15, bar_y = 15, bar_w = 18, bar_h = 150;
                 float frac = (control.intensity - FIRE_INTENSITY_MIN)
@@ -436,7 +436,7 @@ int main(int argc, char **argv) {
 
             SDL_RenderPresent(renderer);
 
-            /* penjagaan framerate manual jika vsync tidak aktif */
+            // penjagaan framerate manual jika vsync tidak aktif 
             Uint32 now = SDL_GetTicks();
             Uint32 elapsed = now - last_ticks;
             const Uint32 frame_budget = 1000 / TARGET_FPS;
@@ -448,7 +448,7 @@ int main(int argc, char **argv) {
         frame_no++;
     }
 
-    /* ---- Ringkasan pengujian performa (opsional, saat max_frames dipakai) ---- */
+    // ---- Ringkasan pengujian performa (opsional, saat max_frames dipakai) ---- 
     if (max_frames > 0) {
         double local_avg_compute_ms = (frame_no > 0) ? (t_compute_total / frame_no) * 1000.0 : 0.0;
         double local_avg_comm_ms = (frame_no > 0) ? (t_comm_total / frame_no) * 1000.0 : 0.0;
