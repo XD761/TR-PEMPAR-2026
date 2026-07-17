@@ -220,7 +220,7 @@ int main(int argc, char **argv) {
                 if (e.type == SDL_QUIT) quit = 1;
                 if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) quit = 1;
                 // e.key.repeat == 0 -> hanya trigger sekali per penekanan,
-                 * bukan berkali-kali selama tombol ditahan 
+                // bukan berkali-kali selama tombol ditahan 
                 if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_SPACE && e.key.repeat == 0) {
                     control.paused = !control.paused;
                 }
@@ -284,7 +284,7 @@ int main(int argc, char **argv) {
                 if (p->life <= 0.0f || p->y < -20.0f) {
                     respawn_particle(p, &p->seed);
                     // skala intensitas: api "besar" hidup lebih lama & meluncur
-                     * lebih kencang ke atas -> nyala tampak lebih tinggi/besar 
+                    // lebih kencang ke atas -> nyala tampak lebih tinggi/besar 
                     p->life *= control.intensity;
                     p->max_life *= control.intensity;
                     p->vy *= control.intensity;
@@ -294,22 +294,11 @@ int main(int argc, char **argv) {
                 float density = (float)global_hist[col];
                 float buoyancy = (BASE_BUOYANCY + DENSITY_BUOYANCY_GAIN * (density / 30.0f))
                                  * control.intensity;
-
-                // ========================================================== 
-                // Menciptakan gaya horizontal yang bergantung pada tinggi
-                // partikel (p->y) dan waktu (sim_time) untuk ayunan kolom api 
-                // ========================================================== 
-
-                // wavy_force: menciptakan ayunan horizontal (seperti gelombang)
-                // Period (kecepatan ayunan): sim_time * 4.0f
-                // Wavelength (panjang gelombang vertikal): p->y * 0.01f
-                // Amplitudo (kekuatan ayunan): 100.0f * control.intensity
                  
                 float wavy_force = sinf(sim_time * 4.0f + p->y * 0.01f) * 100.0f * control.intensity;
 
                 // Turbulensi acak dasar (tetap dipertahankan untuk chaos) 
-                float basic_turbulence = sinf(sim_time * 3.0f + (float)(p->seed % 1000) * 0.01f)
-                                         * TURBULENCE_STRENGTH;
+                float basic_turbulence = sinf(sim_time * 3.0f + (float)(p->seed % 1000) * 0.01f) * TURBULENCE_STRENGTH;
 
                 // Gabungkan kedua gaya untuk kecepatan horizontal 
                 p->vx = (p->vx + (basic_turbulence + wavy_force) * FIXED_DT) * VX_DAMPING;
@@ -362,7 +351,7 @@ int main(int argc, char **argv) {
                 Uint8 r, g, b, a;
                 fire_color(f, &r, &g, &b, &a);
                 // ukuran partikel ikut skala intensitas -> api tampak
-                 * membesar/mengecil, bukan cuma naik lebih tinggi/rendah 
+                // membesar/mengecil, bukan cuma naik lebih tinggi/rendah 
                 int sz = (int)((2 + 4.0f * f) * control.intensity);
                 if (sz < 1) sz = 1;
                 SDL_Rect rect = { (int)p->x - sz / 2, (int)p->y - sz / 2, sz, sz };
