@@ -2,7 +2,7 @@
 Tugas Rancang — Praktikum Pemrosesan Paralel (CE 602)
 
 ## 1. Identitas
-NAMA	: Natanael Kris Setyabudi
+NAMA	: Natanael Kris Setyabudi	|| 
 NIM	: 622023018
 
 ## 2. Deskripsi Singkat
