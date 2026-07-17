@@ -187,9 +187,12 @@ int main(int argc, char **argv) {
         max_frames = strtol(argv[1], NULL, 10);
     }
 
+    // fungsi pembantu
+    // ini tugasnya membagi angka N_PARTICLES itu secara adil ke masing-masing prosesor.
     int my_count = local_count_for_rank(rank, size, N_PARTICLES);
     int my_offset = local_offset_for_rank(rank, size, N_PARTICLES);
 
+    // cek di P ke berapa
     Particle *local = (Particle *)malloc(sizeof(Particle) * my_count);
     if (!local) {
         fprintf(stderr, "[rank %d] gagal alokasi memori partikel\n", rank);
