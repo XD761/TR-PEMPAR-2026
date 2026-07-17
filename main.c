@@ -1,49 +1,5 @@
-/*
-Simulasi Particle System 2D - Efek Api (Fire Simulation) "Full & Wavy"
-Implementasi paralel menggunakan MPI (Message Passing Interface)
-
-Tugas Rancang - Praktikum Pemrosesan Paralel (CE 602)
-
-------------------------------------------------------------------
-ARSITEKTUR PARALEL (ringkas, detail lengkap ada di README.md):
-
-- N_PARTICLES partikel dibagi rata ke seluruh proses MPI (rank).
-Setiap rank HANYA menyimpan dan mengupdate potongan (slice)
-partikel miliknya sendiri -> distributed memory, bukan replikasi.
-
-- Setiap frame, tiap rank menghitung histogram kepadatan lokal
-(berapa banyak partikel aktif per kolom grid) dari slice-nya,
-lalu seluruh rank saling bertukar dan menjumlahkan histogram itu
-dengan MPI_Allreduce (SUM). Hasilnya dipakai sebagai medan
-"kepadatan termal" bersama yang memengaruhi daya angkat (buoyancy)
-tiap partikel -> ini adalah bentuk interaksi antar-partikel yang
-dihitung secara paralel dan terdistribusi.
- 
-- Setiap rank lalu mengupdate posisi/kecepatan/usia partikel di
- slice-nya sendiri (fisika api: naik karena panas, turbulensi,
- pendinginan, respawn).
-
- - Rank 0 mengumpulkan seluruh slice (MPI_Gatherv, karena ukuran
- slice antar rank bisa berbeda jika N_PARTICLES tidak habis dibagi
- jumlah proses) untuk keperluan VISUALISASI saja. Rank lain tidak
- pernah membuka window/SDL.
-
- Build : lihat Makefile (make)
- Jalankan: mpirun -np <jumlah_proses> ./fire_sim [max_frames]
- max_frames opsional, untuk pengujian otomatis/headless.
-
- KONTROL INTERAKTIF:
- - Klik & tahan tombol kiri mouse di atas api -> partikel di sekitar
- kursor menyingkir (gaya tolak radial dari titik mouse).
- - Tombol SPASI -> pause / lanjutkan simulasi (toggle).
- - Tahan tombol 'W' -> api membesar (lebih tinggi & lebih besar).
- - Tahan tombol 'S' -> api mengecil.
- Posisi mouse, status pause, dan level intensitas hanya diketahui
- rank 0 (pemilik window), sehingga setiap frame rank 0 menyiarkan
- status tersebut (MPI_Bcast) ke seluruh rank agar update fisika di
- semua rank konsisten.
- ------------------------------------------------------------------*/
- 
+// Nama : Natanael Kris Setyabudi
+// NIM  : 622023018
 
 #include <mpi.h>
 #include <SDL2/SDL.h>
